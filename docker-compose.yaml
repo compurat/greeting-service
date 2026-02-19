@@ -1,0 +1,48 @@
+services:
+  good-morning-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: good-morning-service
+    environment:
+      SERVER_PORT: 8080
+    ports:
+      - "1002:8080"
+
+  good-evening-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: good-evening-service
+    environment:
+      SERVER_PORT: 8080
+    ports:
+      - "1001:8080"
+
+  good-night-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: good-night-service
+    environment:
+      SERVER_PORT: 8080
+    ports:
+      - "1003:8080"
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - good-morning-service
+      - good-evening-service
+      - good-night-service
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_data:/usr/share/nginx/html
+
+volumes:
+  nginx_data: {}

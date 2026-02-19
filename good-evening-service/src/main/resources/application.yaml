@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: good-evening-service
+
+server:
+  port: 1001

@@ -1,0 +1,67 @@
+stages:
+  - build
+  - docker-build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  # GitLab Container Registry configuratie
+  REGISTRY_IMAGE: $CI_REGISTRY_IMAGE
+  # Services lijst
+  SERVICES: "good-morning-service good-evening-service good-night-service"
+
+# 1. Maven build voor alle services
+maven-build:
+  stage: build
+  image: maven:3.9.9-eclipse-temurin-17
+  script:
+    - mvn clean package -DskipTests
+  artifacts:
+    paths:
+      - "**/target/*.jar"
+    expire_in: 1 hour
+
+# 2. Docker images bouwen en pushen
+docker-build:
+  stage: docker-build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  parallel:
+    matrix:
+      - SERVICE: ["good-morning-service", "good-evening-service", "good-night-service"]
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build --build-arg SERVICE=$SERVICE -t $REGISTRY_IMAGE/$SERVICE:$CI_COMMIT_SHA -t $REGISTRY_IMAGE/$SERVICE:latest .
+    - docker push $REGISTRY_IMAGE/$SERVICE:$CI_COMMIT_SHA
+    - docker push $REGISTRY_IMAGE/$SERVICE:latest
+
+# 3. Deploy naar Kubernetes via Rancher
+deploy:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  before_script:
+    # Zorg dat de kubeconfig aanwezig is (wordt verwacht als CI/CD variabele KUBECONFIG)
+    - mkdir -p ~/.kube
+    - echo "$RANCHER_KUBECONFIG" > ~/.kube/config
+    - chmod 600 ~/.kube/config
+  script:
+    # Update de images in de manifests naar de zojuist gebouwde versies
+    - |
+      for SERVICE in $SERVICES; do
+        sed -i "s|image: $SERVICE:latest|image: $REGISTRY_IMAGE/$SERVICE:$CI_COMMIT_SHA|g" k8s/$SERVICE.yaml
+      done
+    # Pas de manifests toe (inclusief gateway)
+    - kubectl apply -f k8s/
+    # Zorg dat wijzigingen aan de ConfigMap van de gateway ook toegepast worden
+    - kubectl rollout restart deployment/gateway-service
+    # (optioneel) forceer ook een rollout van de drie services bij nieuwe images
+    - kubectl rollout restart deployment/good-morning-service || true
+    - kubectl rollout restart deployment/good-evening-service || true
+    - kubectl rollout restart deployment/good-night-service || true
+  environment:
+    name: production
+  only:
+    - main

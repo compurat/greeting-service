@@ -13,7 +13,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   # GitLab Container Registry configuratie
   REGISTRY_IMAGE: $CI_REGISTRY_IMAGE
-  # Standaard keuze voor alle services, maar kan handmatig worden overschreven in GitLab UI
+  # Standaard keuze voor alle services, maar kan handmatig worden overschreven in GitLab UIs
   DEPLOY_SERVICE:
     value: "all"
     options:
